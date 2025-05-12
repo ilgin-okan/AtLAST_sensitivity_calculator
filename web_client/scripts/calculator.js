@@ -57,6 +57,8 @@ $(document).ready(() => {
                 });
             })
 
+            CalculatorUI.showDifferentInstrumentOptions("instrument-type");
+
             const calcOptions =
                 document.querySelectorAll('input[name="calc-options"');
             let checkedOption;

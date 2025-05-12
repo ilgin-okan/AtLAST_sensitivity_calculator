@@ -26,6 +26,16 @@ const hideInvalidMessages = (hidden) => {
     });
 }
 
+
+const handleClick = function(e) {
+    console.log("Selected value:", e.target.value);
+};
+
+const showDifferentInstrumentOptions = (dropdown_choice) => {
+    const instrument_name = document.getElementById(dropdown_choice);
+    instrument_name.addEventListener("click", handleClick.bind(instrument_name));
+}
+    
 const disableCalculateBtn = (disable) => {
     const calculateBtn = document.getElementById("calculate");
     calculateBtn.disabled = disable;
@@ -101,6 +111,6 @@ const toggleSpinner = (action, completed) => {
     }
 }
 
-export {setUIInitialState, hideInvalidMessages, showCalculatedValue,
-        disableCalculateBtn, initializeInputs, initializeUnits,
-        resetOutputBox, toggleSpinner}
+export {setUIInitialState, hideInvalidMessages, showDifferentInstrumentOptions,
+        showCalculatedValue, disableCalculateBtn, initializeInputs, 
+        initializeUnits, resetOutputBox, toggleSpinner}
