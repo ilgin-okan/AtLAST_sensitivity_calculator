@@ -1,5 +1,4 @@
 import warnings
-import copy
 import astropy.units as u
 from astropy.constants import k_B
 import numpy as np
@@ -8,9 +7,11 @@ from atlast_sc.derived_groups import Temperatures
 from atlast_sc.derived_groups import Efficiencies
 from atlast_sc.models import DerivedParams
 from atlast_sc.models import UserInput
-from atlast_sc.models import InstrumentSetup
-from atlast_sc.models import CalculationInput
-from atlast_sc.utils import Decorators, DataHelper
+from atlast_sc.config import Config
+from atlast_sc.parameters.user_input_parameters import UserInputParameters
+from atlast_sc.parameters.instrument_setup_parameters import InstrumentSetupParameters
+from atlast_sc.parameters.derived_parameters import DerivedParameters
+from atlast_sc.utils import DataHelper
 from atlast_sc.exceptions import CalculatedValueInvalidWarning
 from atlast_sc.exceptions import ValueOutOfRangeException
 
@@ -30,7 +31,6 @@ class Calculator:
     def __init__(self, user_input={}, instrument_setup={}, finetune=False):
         self._finetune = finetune
 
-        self._derived_params = None
 
         # Make sure the user input doesn't contain any unexpected parameter
         # names
@@ -40,301 +40,13 @@ class Calculator:
         self._config = Config(user_input, instrument_setup)
 
         # Calculate the derived parameters used in the calculation
-        self._calculate_derived_parameters()
+        self._uip = UserInputParameters(self._config)
+        self._isp = InstrumentSetupParameters(self._config)
+       
+        derived_params =  self._calculate_derived_parameters()
+        self._dp = DerivedParameters(derived_params, self._config)
 
-    ###################################################
-    # Getters and setters for user input parameters   #
-    ###################################################
-
-    # TODO t_int and sensitivity are a special case. They can be both
-    #   set and calculated. Special care needs to be taken on setting them:
-    #   they will have to be validated if they're set, but not calculated.
-    #   Also, if they're set, the user needs to be warned if they then try
-    #   to use Calculator values with redoing the senstivity/integration time
-    #   calculation
-    @property
-    def t_int(self):
-        """
-        Get or set the integration time
-        """
-        return self.calculation_inputs.user_input.t_int.value
-
-    @t_int.setter
-    @Decorators.validate_value
-    def t_int(self, value):
-        # TODO: Setting this value in the on the inputs feels wrong.
-        #  This may be a calculated param. Allowing the user to change it
-        #  without restriction may lead to inaccurate output if they perform
-        #  the sensitivity calculation, change the integration time, then
-        #  store or use those stored values.
-        #  Need separate "outputs" properties that are used for
-        #  subsequent calculations and/or storing results?
-        # TODO: We don't technically need to update the unit here (ditto other
-        #   values with units, because the value is set to a Quantity, which
-        #   contains the units. It's this value that is used throughout the
-        #   the application. However, not updating it feels odd, since it would
-        #   result in a discrepancy between the unit property and the unit
-        #   contained in the Quantity object. Think about this...
-        self.calculation_inputs.user_input.t_int.value = value
-        self.calculation_inputs.user_input.t_int.unit = value.unit
-
-    @property
-    def sensitivity(self):
-        """
-        Get or set the sensitivity
-        """
-        return self.calculation_inputs.user_input.sensitivity.value
-
-    @sensitivity.setter
-    @Decorators.validate_value
-    def sensitivity(self, value):
-        # TODO: Setting this value in the on the inputs feels wrong.
-        #  This may be a calculated param. Allowing the user to change it
-        #  without restriction may lead to inaccurate output if they perform
-        #  the sensitivity calculation, change the integration time, then
-        #  store or use those stored values.
-        #  Need separate "outputs" properties that are used for
-        #  subsequent calculations and/or storing results?
-        self.calculation_inputs.user_input.sensitivity.value = value
-        self.calculation_inputs.user_input.sensitivity.unit = value.unit
-
-    @property
-    def bandwidth(self):
-        """
-        Get or set the bandwidth
-        """
-        return self.calculation_inputs.user_input.bandwidth.value
-    # With the new calculation of SEFD over the whole frequency range, SEFD is now dependent on bandwidth and so parameters must be updated every time bandwidth is changed.
-    @bandwidth.setter
-    @Decorators.validate_and_update_params
-    def bandwidth(self, value):
-        self.calculation_inputs.user_input.bandwidth.value = value
-        self.calculation_inputs.user_input.bandwidth.unit = value.unit
-
-    @property
-    def obs_freq(self):
-        """
-        Get or set the sky frequency of the observations
-        """
-        return self.calculation_inputs.user_input.obs_freq.value
-
-    @obs_freq.setter
-    @Decorators.validate_and_update_params
-    def obs_freq(self, value):
-        self.calculation_inputs.user_input.obs_freq.value = value
-        self.calculation_inputs.user_input.obs_freq.unit = value.unit
-
-    @property
-    def n_pol(self):
-        """
-        Get or set the number of polarisations being observed
-        """
-        return self.calculation_inputs.user_input.n_pol.value
-
-    @n_pol.setter
-    @Decorators.validate_value
-    def n_pol(self, value):
-        self.calculation_inputs.user_input.n_pol.value = value
-
-    @property
-    def weather(self):
-        """
-        Get or set the relative humidity
-        """
-        return self.calculation_inputs.user_input.weather.value
-
-    @weather.setter
-    @Decorators.validate_and_update_params
-    def weather(self, value):
-        self.calculation_inputs.user_input.weather.value = value
-
-    @property
-    def elevation(self):
-        """
-        Get or set the elevation of the target for calculating air mass
-        """
-        return self.calculation_inputs.user_input.elevation.value
-
-    @elevation.setter
-    @Decorators.validate_and_update_params
-    def elevation(self, value):
-        self.calculation_inputs.user_input.elevation.value = value
-        self.calculation_inputs.user_input.elevation.unit = value.unit
-
-    ####################################################################
-    # Getters and a couple of setters for instrument setup parameters  #
-    ####################################################################
-
-    @property
-    def g(self):
-        """
-        Get the sideband ratio
-        """
-        return self.calculation_inputs.instrument_setup.g.value
-
-    @property
-    def surface_rms(self):
-        """
-        Get the surface smoothness of the instrument
-        """
-        return self.calculation_inputs.instrument_setup.surface_rms.value
-
-    @property
-    def dish_radius(self):
-        """
-        Get the radius of the primary mirror
-        """
-        return self.calculation_inputs.instrument_setup.dish_radius.value
-
-    @dish_radius.setter
-    @Decorators.validate_and_update_params
-    def dish_radius(self, value):
-        # TODO Flag to the user somehow that they are varying an instrument
-        #   setup parameter?
-        self.calculation_inputs.instrument_setup.dish_radius.value = value
-        self.calculation_inputs.instrument_setup.dish_radius.unit = value.unit
-
-    @property
-    def T_amb(self):
-        """
-        Get the average ambient temperature
-        """
-        return self.calculation_inputs.instrument_setup.T_amb.value
-
-    @property
-    def eta_eff(self):
-        """
-        Get the forward efficiency
-        """
-        return self.calculation_inputs.instrument_setup.eta_eff.value
-
-    @property
-    def eta_ill(self):
-        """
-        Get the illumination efficiency
-        """
-        return self.calculation_inputs.instrument_setup.eta_ill.value
-
-    @property
-    def eta_spill(self):
-        """
-        Get the spillover efficiency
-        """
-        return self.calculation_inputs.instrument_setup.eta_spill.value
-
-    @property
-    def eta_block(self):
-        """
-        Get the lowered efficiency due to blocking
-        """
-        return self.calculation_inputs.instrument_setup.eta_block.value
-
-    @property
-    def eta_pol(self):
-        """
-        Get the polarisation efficiency
-        """
-        return self.calculation_inputs.instrument_setup.eta_pol.value
-
-    #########################
-    # Getters for constants #
-    #########################
-
-    @property
-    def T_cmb(self):
-        """
-        Get the temperature of the CMB
-        """
-        return self.calculation_inputs.T_cmb.value
-
-    ###################################
-    # Getters for derived parameters  #
-    ###################################
-
-    @property
-    def tau_atm(self):
-        """
-        Get the atmospheric transmittance
-        """
-        return self.derived_parameters.tau_atm
-
-    @property
-    def T_atm(self):
-        """
-        Get the atmospheric temperature
-        """
-        return self.derived_parameters.T_atm
-
-    @property
-    def T_rx(self):
-        """
-        Get the receiver temperature
-        """
-        return self.derived_parameters.T_rx
-
-    @property
-    def eta_a(self):
-        """
-        Get the dish efficiency
-        """
-        return self.derived_parameters.eta_a
-
-    @property
-    def eta_s(self):
-        """
-        Get the system efficiency
-        """
-        return self.derived_parameters.eta_s
-
-    @property
-    def T_sys(self):
-        """
-        Get the system temperature
-        """
-        return self.derived_parameters.T_sys
-
-    @property
-    def T_sky(self):
-        """
-        Get the system temperature
-        """
-        return self.derived_parameters.T_sky
-
-    @property
-    def sefd(self):
-        """
-        Get the system equivalent flux density
-        """
-        return self.derived_parameters.sefd
-
-    @property
-    def calculation_inputs(self):
-        """
-        The inputs to the calculation (user input and instrument setup)
-        """
-        return self._config.calculation_inputs
-
-    @property
-    def user_input(self):
-        """
-        User inputs to the calculation
-        """
-        return self._config.calculation_inputs.user_input
-
-    @property
-    def instrument_setup(self):
-        """
-        Instrument setup parameters
-        """
-        return self._config.calculation_inputs.instrument_setup
-
-    @property
-    def derived_parameters(self):
-        """
-        Parameters calculated from user input and instrument setup
-        """
-        return self._derived_params
-
+        self.sensitivity = self._uip.sensitivity
     #################################################
     # Public methods for performing sensitivity and #
     # integration time calculations                 #
@@ -358,15 +70,15 @@ class Calculator:
 
         if t_int is not None:
             if update_calculator:
-                self.t_int = t_int
+                self._uip.t_int = t_int
             else:
                 DataHelper.validate(self, 't_int', t_int)
         else:
-            t_int = self.t_int
+            t_int = self._uip.t_int
 
         sensitivity = \
-            self.sefd / \
-            (self.eta_s * np.sqrt(self.n_pol * self.bandwidth * t_int))
+            self._dp.sefd / \
+            (self._dp.eta_s * np.sqrt(self._uip.n_pol * self._uip.bandwidth * t_int))
 
         # Convert the output to the most convenient units
         sensitivityresult = sensitivity.to(u.mJy)
@@ -417,8 +129,8 @@ class Calculator:
         else:
             sensitivity = self.sensitivity
 
-        t_int = (self.sefd / (sensitivity * self.eta_s)) ** 2 \
-            / (self.n_pol * self.bandwidth)
+        t_int = (self._dp.sefd / (sensitivity * self._dp.eta_s)) ** 2 \
+            / (self._uip.n_pol * self._uip.bandwidth)
 
         # Convert the output to the most convenient units
         timeresult = t_int.to(u.s)
@@ -496,19 +208,20 @@ class Calculator:
         # ------------------------------------------------------------------
 
         # Perform efficiencies calculations
-        eta = Efficiencies(self.obs_freq, self.surface_rms, self.eta_ill,
-                           self.eta_spill, self.eta_block, self.eta_pol)
+        
+        eta = Efficiencies(self._uip.obs_freq , self._isp.surface_rms, self._isp.eta_ill,
+                           self._isp.eta_spill, self._isp.eta_block, self._isp.eta_pol)
 
         # Perform atmospheric model calculations
         atm = AtmosphereParams()
-        tau_atm = atm.calculate_tau_atm(self.obs_freq,
-                                        self.weather, self.elevation)
-        T_atm = atm.calculate_atmospheric_temperature(self.obs_freq,
-                                                      self.weather)
+        tau_atm = atm.calculate_tau_atm(self._uip.obs_freq,
+                                        self._uip.weather, self._uip.elevation)
+        T_atm = atm.calculate_atmospheric_temperature(self._uip.obs_freq,
+                                                      self._uip.weather)
 
         # Calculate the temperatures
-        temps = Temperatures(self.obs_freq, self.T_cmb, self.T_amb, self.g,
-                             self.eta_eff, T_atm, tau_atm)
+        temps = Temperatures(self._uip.obs_freq, self._isp.T_cmb, self._isp.T_amb, self._isp.g,
+                             self._isp.eta_eff, T_atm, tau_atm)
 
         # LDM
         # ------------------------------------------------------------------
@@ -522,8 +235,8 @@ class Calculator:
         # ------------------------------------------------------------------
 
         # define lower and upper limit of the requested band
-        obs_freq_low = (self.obs_freq-0.50*self.bandwidth).to('GHz').value
-        obs_freq_upp = (self.obs_freq+0.50*self.bandwidth).to('GHz').value
+        obs_freq_low = (self._uip.obs_freq-0.50*self._uip.bandwidth).to('GHz').value
+        obs_freq_upp = (self._uip.obs_freq+0.50*self._uip.bandwidth).to('GHz').value
 
         # select all the frequencies in the atm tables comprised within the band edges
         obs_freq_list = atm.tau_atm_table[:, 0][np.logical_and(atm.tau_atm_table[:, 0]>obs_freq_low,
@@ -549,24 +262,26 @@ class Calculator:
 
             # compute SEFD for each narrow spectral element
             for freq in obs_freq_list:
-                _tau_atm = atm.calculate_tau_atm(freq,self.weather,self.elevation)
+                _tau_atm = atm.calculate_tau_atm(freq,self._uip.weather,self._uip.elevation)
 
-                _T_atm = atm.calculate_atmospheric_temperature(freq,self.weather)
-                _temps = Temperatures(freq, self.T_cmb, self.T_amb, self.g,
-                                      self.eta_eff, _T_atm, _tau_atm)
+                _T_atm = atm.calculate_atmospheric_temperature(freq,self._uip.weather)
+                _temps = Temperatures(freq, self._isp.T_cmb, self._isp.T_amb, self._isp.g,
+                                      self._isp.eta_eff, _T_atm, _tau_atm)
 
                 _sefd.append(self._calculate_sefd(_temps.T_sys,eta.eta_a).to('J/m2').value)
             _sefd = np.asarray(_sefd)*(u.J/u.m**2)
 
             # obtain the effective SEFD for the input band
-            sefd = np.sqrt(self.bandwidth/np.sum(obs_band_list/_sefd**2))
+            sefd = np.sqrt(self._uip.bandwidth/np.sum(obs_band_list/_sefd**2))
         else:
             sefd = self._calculate_sefd(temps.T_sys, eta.eta_a)
 
-        self._derived_params = \
+        _derived_params = \
             DerivedParams(tau_atm=tau_atm, T_atm=T_atm, T_rx=temps.T_rx,
                           eta_a=eta.eta_a, eta_s=eta.eta_s, T_sys=temps.T_sys, T_sky=temps.T_sky,
                           sefd=sefd)
+        
+        return _derived_params
 
     def _calculate_sefd(self, T_sys, eta_a):
         """
@@ -581,7 +296,7 @@ class Calculator:
         :rtype: astropy.units.Quantity
         """
 
-        dish_area = np.pi * self.dish_radius ** 2
+        dish_area = np.pi * self._isp.dish_radius ** 2
         sefd = (2 * k_B * T_sys) / (eta_a * dish_area)
 
         return sefd
@@ -608,47 +323,3 @@ class Calculator:
 
         return message
 
-
-class Config:
-    """
-    Class that holds the user input and instrument setup parameters
-    used to perform the sensitivity calculations.
-    """
-    def __init__(self, user_input={}, instrument_setup={}):
-        """
-        Initialises all the required parameters from user_input and
-        instrument_setup.
-
-        :param user_input: A dictionary of user inputs of structure
-        {'param_name':{'value': <value>, 'unit': <unit>}}
-        :type user_input: dict
-        :param instrument_setup: A dictionary of instrument setup parameters
-        of structure
-        {'param_name':{'value': <value>, 'unit': <unit>}}
-        :type instrument_setup: dict
-        """
-
-        new_user_input = UserInput(**user_input)
-        new_instrument_setup = InstrumentSetup(**instrument_setup)
-        self._calculation_inputs = \
-            CalculationInput(user_input=new_user_input,
-                             instrument_setup=new_instrument_setup)
-
-        # Make a deep copy of the calculation inputs to enable the
-        # calculator to be reset to its initial setup
-        self._original_inputs = copy.deepcopy(self._calculation_inputs)
-
-    @property
-    def calculation_inputs(self):
-        """
-        Get the calculation inputs (user input and instrument setup)
-        """
-        return self._calculation_inputs
-
-    def reset(self):
-        """
-        Resets the calculator configuration parameters (user input and
-        instrument setup to their original values.
-        """
-        self._calculation_inputs = \
-            self._original_inputs
