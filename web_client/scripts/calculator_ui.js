@@ -26,14 +26,13 @@ const hideInvalidMessages = (hidden) => {
     });
 }
 
-
-const handleClick = function(e) {
+const handleInstrumentSelection = (e) => {
     console.log("Selected value:", e.target.value);
-};
+}
 
 const showDifferentInstrumentOptions = (dropdown_choice) => {
     const instrument_name = document.getElementById(dropdown_choice);
-    instrument_name.addEventListener("change", handleClick.bind(instrument_name));
+    instrument_name.addEventListener("change", handleInstrumentSelection);
 }
     
 const disableCalculateBtn = (disable) => {
