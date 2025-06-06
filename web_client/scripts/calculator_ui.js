@@ -33,7 +33,7 @@ const handleClick = function(e) {
 
 const showDifferentInstrumentOptions = (dropdown_choice) => {
     const instrument_name = document.getElementById(dropdown_choice);
-    instrument_name.addEventListener("click", handleClick.bind(instrument_name));
+    instrument_name.addEventListener("change", handleClick.bind(instrument_name));
 }
     
 const disableCalculateBtn = (disable) => {
