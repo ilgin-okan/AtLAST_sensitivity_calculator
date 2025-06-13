@@ -47,6 +47,10 @@ class Calculator:
         self._dp = DerivedParameters(derived_params, self._config)
 
         self.sensitivity = self._uip.sensitivity
+
+
+        instrument_names = self.find_applicable_instruments()
+
     #################################################
     # Public methods for performing sensitivity and #
     # integration time calculations                 #
@@ -183,6 +187,50 @@ class Calculator:
         for param in user_input:
             if param not in test_model.__dict__:
                 raise ValueError(f'"{param}" is not a valid input parameter')
+
+    
+    def find_applicable_instruments(self):
+        obs_freq = float(self._uip.obs_freq.value)
+        bandwidth = float(self._uip.bandwidth.value)
+        applicable_obs_freq_instruments = []
+        applicable_bandw_instruments = []
+
+        instrument_obs_freqs = {
+            'finer' : [(120.0, 360.0)],
+            'sepia' : [(163.0, 211.0), (272.0, 376.0), (600.0, 722.0)],
+            'chai' : [(460.0, 500.0), (780.0, 820.0)],
+            'tifuun' : [(90.0, 360.0)],
+            'gltcam' : [(130.0, 170.0), (190.0, 250.0), (250.0, 295.0), (330.0, 365.0), (385.0, 415.0), (630.0, 710.0)],
+            'muscat' : [(250.0, 300.0)]
+        }
+
+        instrument_bandw_vals = {
+            'finer' : [(10500.0, 3000000.0)],
+            'sepia' : [(10000.0, 5600000.0), (10000.0, 32000000.0), (10000.0, 10000000.0)],
+            'chai' : [(10000.0, 1000000.0), (10000.0, 1000000.0)],
+            'tifuun' : [(10.0, 1000.0)],
+            'gltcam' : [(1.0, 5.0), (1.0, 5.0), (1.0, 5.0), (1.0, 5.0), (1.0, 5.0), (1.0, 5.0)],
+            'muscat' : [(1.0, 5.0)]
+        }
+
+        # TODO: could make these more efficient by looking at general ranges first 
+        for instrument, obs_freqs in instrument_obs_freqs.items(): 
+            for tuple in obs_freqs:
+                min_freq = tuple[0]
+                max_freq = tuple[1]
+                if obs_freq > min_freq and obs_freq < max_freq:
+                    applicable_obs_freq_instruments.append(instrument)
+        
+        for instrument, bandw_vals in instrument_bandw_vals.items():
+            for tuple in bandw_vals:
+                min_bandw = tuple[0]
+                max_bandw = tuple[1]
+                if bandwidth > min_bandw and bandwidth < max_bandw:
+                    applicable_bandw_instruments.append(instrument)
+
+        applicable_instruments = list(set(applicable_obs_freq_instruments) & set(applicable_bandw_instruments))
+        
+        return applicable_instruments
 
     def _calculate_derived_parameters(self):
         """
