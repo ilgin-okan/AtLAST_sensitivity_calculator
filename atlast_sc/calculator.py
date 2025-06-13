@@ -229,8 +229,12 @@ class Calculator:
                     applicable_bandw_instruments.append(instrument)
 
         applicable_instruments = list(set(applicable_obs_freq_instruments) & set(applicable_bandw_instruments))
-        
-        return applicable_instruments
+
+        if len(applicable_instruments) > 1:
+            # TODO: there might be further logic incorporated to choose which instrument will be defaulted
+            return applicable_instruments[1]
+        else:
+            return applicable_instruments[0]
 
     def _calculate_derived_parameters(self):
         """
