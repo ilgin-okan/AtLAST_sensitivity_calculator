@@ -8,6 +8,7 @@ from atlast_sc.derived_groups import Efficiencies
 from atlast_sc.models import DerivedParams
 from atlast_sc.models import UserInput
 from atlast_sc.config import Config
+from atlast_sc.parameters.instrument_specific_parameters import InstrumentSpecificParameters
 from atlast_sc.parameters.user_input_parameters import UserInputParameters
 from atlast_sc.parameters.instrument_setup_parameters import InstrumentSetupParameters
 from atlast_sc.parameters.derived_parameters import DerivedParameters
@@ -42,14 +43,13 @@ class Calculator:
         # Calculate the derived parameters used in the calculation
         self._uip = UserInputParameters(self._config)
         self._isp = InstrumentSetupParameters(self._config)
-       
-        derived_params =  self._calculate_derived_parameters()
-        self._dp = DerivedParameters(derived_params, self._config)
 
         self.sensitivity = self._uip.sensitivity
 
+        self._inst_name = self.find_applicable_instruments()
 
-        instrument_names = self.find_applicable_instruments()
+        derived_params =  self._calculate_derived_parameters()
+        self._dp = DerivedParameters(derived_params, self._config)
 
     #################################################
     # Public methods for performing sensitivity and #
@@ -188,7 +188,7 @@ class Calculator:
             if param not in test_model.__dict__:
                 raise ValueError(f'"{param}" is not a valid input parameter')
 
-    
+
     def find_applicable_instruments(self):
         obs_freq = float(self._uip.obs_freq.value)
         bandwidth = float(self._uip.bandwidth.value)
@@ -272,7 +272,7 @@ class Calculator:
                                                       self._uip.weather)
 
         # Calculate the temperatures
-        temps = Temperatures(self._uip.obs_freq, self._isp.T_cmb, self._isp.T_amb, self._isp.g,
+        temps = Temperatures(self._inst_name, self._uip.obs_freq, self._isp.T_cmb, self._isp.T_amb, self._isp.g,
                              self._isp.eta_eff, T_atm, tau_atm)
 
         # LDM
