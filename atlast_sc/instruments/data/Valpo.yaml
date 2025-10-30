@@ -1,0 +1,11 @@
+name: "Valpo"
+allowed_ranges:
+  observing_frequency: 
+    ranges: [(800-900)]
+    unit: GHz
+  bandwidth: 
+    ranges: [(1-1000)]
+    unit: MHz
+receiver_temperature: 
+  values: [75.0]
+  unit: K
