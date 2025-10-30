@@ -18,6 +18,7 @@ class InstrumentConfig:
         muscat_instrument = {'class': 'Muscat.py', 'data': 'Muscat.yaml'}
         sepia_instrument = {'class': 'Sepia.py', 'data': 'Sepia.yaml'}
         tifuun_instrument = {'class': 'Tifuun.py', 'data': 'Tifuun.yaml'}
+        valpo_instrument = {'class': 'Valpo.py', 'data': 'Valpo.yaml'}
         # TODO: Add your custom instrument here.
         
         available_instruments = [
@@ -27,7 +28,8 @@ class InstrumentConfig:
             gltcam_instrument,
             muscat_instrument,
             sepia_instrument,
-            tifuun_instrument
+            tifuun_instrument,
+            valpo_instrument
             # TODO: Add your custom instrument here.
         ]
 
